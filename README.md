@@ -12,7 +12,7 @@ generate_data.py ──→ data/rides.csv                  ┐
 ```
 
 **Three-stage pipeline:**
-1. **Data Generation** — Creates realistic test data with ~500 rides, 4 related tables, and injected anomalies across a severity spectrum
+1. **Data Generation** — Creates realistic test data with 2,000 rides, 4 related tables, and injected anomalies across a severity spectrum (including multi-anomaly rides)
 2. **Anomaly Detection** — Session-based pipeline that reconstructs ride payment lifecycles, validates data quality, and runs 5 detectors with confidence scoring
 3. **Dashboard** — Narrative Streamlit app that tells the revenue leak story to non-technical stakeholders
 
@@ -22,7 +22,7 @@ generate_data.py ──→ data/rides.csv                  ┐
 # Install dependencies
 pip install -r requirements.txt
 
-# Generate test data (~500 rides, ~1000+ transaction events)
+# Generate test data (2,000 rides, ~4,300 transaction events)
 python generate_data.py
 
 # Run anomaly detection pipeline
@@ -108,17 +108,17 @@ These thresholds are tighter than raw daily volatility because ride-hailing capt
 
 | Metric | Value |
 |--------|-------|
-| Total anomalies | 638 |
+| Total anomalies | 640 |
 | Revenue lost (confirmed) | $26,630 USD |
 | Revenue at risk | $19,905 USD |
 | **Total impact** | **$46,535 USD** |
 | Most impactful type | Duplicate authorizations ($16,704 USD) |
 | Most affected country | Mexico (273 anomalies, $23,785 USD) |
-| Average confidence | 88.0% |
+| Average confidence | 88.2% |
 | High confidence (>80%) | 493 anomalies |
 | Detection precision | 100.0% (0 false positives) |
-| Detection recall | 99.7% (638/640 injected anomalies found) |
-| F1 Score | 99.8% |
+| Detection recall | 100.0% (640/640 injected anomalies found) |
+| F1 Score | 100.0% |
 
 ## Running Tests
 

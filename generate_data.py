@@ -390,8 +390,13 @@ def inject_currency_discrepancy(ride, txns, exchange_rates_df):
 
     severity = random.choices(["subtle", "moderate", "obvious"], weights=[0.4, 0.35, 0.25], k=1)[0]
 
+    # Minimum skew must exceed the detector's currency-specific FX tolerance
+    # (MXN: 2%, COP: 3%, BRL: 3%) plus a buffer to avoid boundary misses
+    currency = ride["currency"]
+    min_subtle = {"MXN": 0.03, "COP": 0.05, "BRL": 0.05}.get(currency, 0.04)
+
     if severity == "subtle":
-        skew = np.random.uniform(0.03, 0.06)
+        skew = np.random.uniform(min_subtle, min_subtle + 0.03)
     elif severity == "moderate":
         skew = np.random.uniform(0.08, 0.15)
     else:

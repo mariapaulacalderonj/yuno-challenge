@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Apollo Rides - Transaction Anomaly Detection Pipeline
 
@@ -20,6 +18,8 @@ Each anomaly includes:
   - Actionable recommendation
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -27,7 +27,6 @@ import sys
 from datetime import datetime
 from typing import Any
 import pandas as pd
-import numpy as np
 
 DATA_DIR = "data"
 CAPTURE_MISMATCH_THRESHOLD = 0.10  # 10%
@@ -57,7 +56,7 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]
         "exchange_rates": f"{DATA_DIR}/exchange_rates.csv",
     }
     missing = [name for name, path in required_files.items()
-               if not pd.io.common.file_exists(path)]
+               if not os.path.exists(path)]
     if missing:
         logger.error(
             f"Missing required data files: {missing}. "
@@ -169,10 +168,13 @@ def reconstruct_sessions(
     """
     dispute_ride_ids = set(disputes["ride_id"].unique()) if len(disputes) > 0 else set()
 
+    # Pre-group transactions by ride_id for O(n log n) instead of O(n*m)
+    txn_groups = dict(list(transactions.sort_values("timestamp").groupby("ride_id")))
+
     sessions = {}
     for _, ride in rides.iterrows():
         rid = ride["ride_id"]
-        ride_txns = transactions[transactions["ride_id"] == rid].sort_values("timestamp")
+        ride_txns = txn_groups.get(rid, pd.DataFrame(columns=transactions.columns))
         event_types = ride_txns["event_type"].tolist()
 
         # Classify lifecycle pattern
