@@ -106,9 +106,17 @@ def render_sidebar(anomalies):
     return filtered
 
 
-def render_kpis(filtered, total_rides):
-    """Section 1: Headline KPI metrics."""
+def render_kpis(filtered, total_rides, rides):
+    """Section 1: Headline KPI metrics with time period context."""
     st.markdown("---")
+
+    # Compute analysis period from ride timestamps
+    min_date = rides["timestamp"].min().strftime("%b %Y")
+    max_date = rides["timestamp"].max().strftime("%b %Y")
+    months = max(1, (rides["timestamp"].max() - rides["timestamp"].min()).days // 30)
+    st.markdown(
+        f"**Analysis period: {min_date} — {max_date} ({months} months, {total_rides} rides)**"
+    )
 
     money_lost = filtered[filtered["impact_category"] == "money_lost"]["revenue_impact_usd"].sum()
     money_at_risk = filtered[filtered["impact_category"] == "money_at_risk"]["revenue_impact_usd"].sum()
@@ -443,7 +451,7 @@ def main():
         st.warning("No anomalies match the current filters. Adjust the sidebar filters.")
         return
 
-    render_kpis(filtered, total_rides)
+    render_kpis(filtered, total_rides, rides)
     render_breakdown(filtered)
     render_location(filtered)
     render_trend(filtered)

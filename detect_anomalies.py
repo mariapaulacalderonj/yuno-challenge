@@ -20,7 +20,9 @@ Each anomaly includes:
 
 import json
 import logging
+import sys
 from datetime import datetime
+from typing import Any
 import pandas as pd
 
 DATA_DIR = "data"
@@ -42,16 +44,33 @@ logger = logging.getLogger("anomaly_detector")
 # Data Loading & Validation
 # ---------------------------------------------------------------------------
 
-def load_data():
-    """Load all CSV data sources."""
-    rides = pd.read_csv(f"{DATA_DIR}/rides.csv")
-    transactions = pd.read_csv(f"{DATA_DIR}/transactions.csv")
-    disputes = pd.read_csv(f"{DATA_DIR}/disputes_cancellations.csv")
-    exchange_rates = pd.read_csv(f"{DATA_DIR}/exchange_rates.csv")
+def load_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Load all CSV data sources with error handling for missing files."""
+    required_files = {
+        "rides": f"{DATA_DIR}/rides.csv",
+        "transactions": f"{DATA_DIR}/transactions.csv",
+        "disputes": f"{DATA_DIR}/disputes_cancellations.csv",
+        "exchange_rates": f"{DATA_DIR}/exchange_rates.csv",
+    }
+    missing = [name for name, path in required_files.items()
+               if not pd.io.common.file_exists(path)]
+    if missing:
+        logger.error(
+            f"Missing required data files: {missing}. "
+            f"Run 'python generate_data.py' first to create test data."
+        )
+        sys.exit(1)
+
+    rides = pd.read_csv(required_files["rides"])
+    transactions = pd.read_csv(required_files["transactions"])
+    disputes = pd.read_csv(required_files["disputes"])
+    exchange_rates = pd.read_csv(required_files["exchange_rates"])
     return rides, transactions, disputes, exchange_rates
 
 
-def validate_data(rides, transactions, disputes):
+def validate_data(
+    rides: pd.DataFrame, transactions: pd.DataFrame, disputes: pd.DataFrame
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, Any]]:
     """
     Validate data quality. Log issues, quarantine bad records.
     Returns cleaned dataframes and a validation report.
@@ -75,6 +94,20 @@ def validate_data(rides, transactions, disputes):
                 report["issues"].append(f"rides: {null_count} null values in '{col}'")
                 rides = rides.dropna(subset=[col])
                 report["quarantined_rows"] += null_count
+
+    # Check for negative or zero amounts in transactions
+    neg_amounts = (transactions["amount"] <= 0).sum()
+    if neg_amounts > 0:
+        report["issues"].append(f"transactions: {neg_amounts} rows with non-positive amounts")
+        transactions = transactions[transactions["amount"] > 0]
+        report["quarantined_rows"] += neg_amounts
+
+    # Check for negative or zero fares in rides
+    neg_fares = ((rides["actual_fare"] <= 0) | (rides["estimated_fare"] <= 0)).sum()
+    if neg_fares > 0:
+        report["issues"].append(f"rides: {neg_fares} rows with non-positive fare values")
+        rides = rides[(rides["actual_fare"] > 0) & (rides["estimated_fare"] > 0)]
+        report["quarantined_rows"] += neg_fares
 
     # Check for duplicate transaction IDs
     dup_txns = transactions["transaction_id"].duplicated().sum()
@@ -115,7 +148,9 @@ def validate_data(rides, transactions, disputes):
 # Session Reconstruction
 # ---------------------------------------------------------------------------
 
-def reconstruct_sessions(rides, transactions, disputes):
+def reconstruct_sessions(
+    rides: pd.DataFrame, transactions: pd.DataFrame, disputes: pd.DataFrame
+) -> dict[str, dict[str, Any]]:
     """
     Reconstruct payment lifecycle for each ride as a state machine.
     Groups events by ride_id, orders by timestamp.
@@ -162,7 +197,7 @@ def reconstruct_sessions(rides, transactions, disputes):
 # Detector 1: Duplicate Authorizations
 # ---------------------------------------------------------------------------
 
-def detect_duplicate_authorizations(sessions):
+def detect_duplicate_authorizations(sessions: dict[str, dict[str, Any]]) -> list[dict]:
     """
     Detect rides with multiple approved authorizations.
 
@@ -252,7 +287,7 @@ def detect_duplicate_authorizations(sessions):
 # Detector 2: Capture Mismatches (Two-Source Reconciliation)
 # ---------------------------------------------------------------------------
 
-def detect_capture_mismatches(sessions):
+def detect_capture_mismatches(sessions: dict[str, dict[str, Any]]) -> list[dict]:
     """
     Two-source reconciliation: compare capture amount against actual_fare
     from rides table. Only flag if the gap can't be explained by a
@@ -350,10 +385,14 @@ def detect_capture_mismatches(sessions):
 # Detector 3: Ghost Refunds
 # ---------------------------------------------------------------------------
 
-def detect_ghost_refunds(sessions):
+def detect_ghost_refunds(sessions: dict[str, dict[str, Any]]) -> list[dict]:
     """
     Detect refunds on completed rides with no dispute/cancellation record.
     Cross-references rides, transactions, and disputes tables.
+
+    Also handles the edge case where a disputed ride has MORE refunds than
+    expected — the first refund is legitimate (backed by the dispute), but
+    additional refunds are ghost refunds.
     """
     anomalies = []
 
@@ -361,16 +400,23 @@ def detect_ghost_refunds(sessions):
         ride = session["ride"]
         events = session["events"]
 
-        if ride["status"] != "completed" or session["has_dispute"]:
-            continue
-
         refunds = [e for e in events if e["event_type"] == "refund" and e["status"] == "approved"]
         captures = [e for e in events if e["event_type"] == "capture" and e["status"] == "approved"]
 
         if not refunds:
             continue
 
-        for refund in refunds:
+        if ride["status"] == "completed" and not session["has_dispute"]:
+            # Standard case: completed ride, no dispute — ALL refunds are ghost
+            suspect_refunds = refunds
+        elif session["has_dispute"] and len(refunds) > 1:
+            # Edge case: disputed ride with multiple refunds — first is legitimate,
+            # any additional refunds beyond the first are unauthorized
+            suspect_refunds = refunds[1:]
+        else:
+            continue
+
+        for refund in suspect_refunds:
             refund_amount = refund["amount"]
             capture_amount = captures[0]["amount"] if captures else 0
 
@@ -391,11 +437,22 @@ def detect_ghost_refunds(sessions):
                 if days_after > 5:
                     confidence = min(99, confidence + 5)
 
+            is_extra_on_disputed = session["has_dispute"] and refund != refunds[0]
+            if is_extra_on_disputed:
+                reason_text = (
+                    f"Disputed ride has {len(refunds)} refunds but only 1 dispute record. "
+                    f"Extra refund {refund['transaction_id']} is unauthorized."
+                )
+            else:
+                reason_text = (
+                    f"status is 'completed' with no dispute on record. "
+                    f"{'No reference transaction. ' if has_null_ref else ''}"
+                )
+
             recommendation = (
                 f"Investigate refund {refund['transaction_id']} of "
                 f"{refund_amount:.2f} {ride['currency']} on ride {ride_id}: "
-                f"status is 'completed' with no dispute on record. "
-                f"{'No reference transaction. ' if has_null_ref else ''}"
+                f"{reason_text}"
                 f"Escalate to fraud team."
             )
 
@@ -406,7 +463,8 @@ def detect_ghost_refunds(sessions):
                 "reference_txn_id": refund.get("reference_txn_id"),
                 "days_after_capture": round(days_after, 1) if days_after else None,
                 "ride_status": ride["status"],
-                "has_dispute_record": False,
+                "has_dispute_record": session["has_dispute"],
+                "extra_refund_on_disputed_ride": is_extra_on_disputed,
                 "refund_exceeds_capture": refund_amount > capture_amount if capture_amount > 0 else None,
             }
 
@@ -430,7 +488,9 @@ def detect_ghost_refunds(sessions):
 # Detector 4: Currency Conversion Discrepancies
 # ---------------------------------------------------------------------------
 
-def detect_currency_discrepancies(sessions, exchange_rates):
+def detect_currency_discrepancies(
+    sessions: dict[str, dict[str, Any]], exchange_rates: pd.DataFrame
+) -> list[dict]:
     """
     Detect captures where amount_usd doesn't match the expected USD conversion
     using the day's exchange rate.
@@ -544,7 +604,7 @@ def detect_currency_discrepancies(sessions, exchange_rates):
 # Detector 5: Abandoned Authorizations
 # ---------------------------------------------------------------------------
 
-def detect_abandoned_authorizations(sessions):
+def detect_abandoned_authorizations(sessions: dict[str, dict[str, Any]]) -> list[dict]:
     """
     Detect authorizations on completed rides that were never captured or voided.
     Context matters: cancelled rides with only an auth are normal.
@@ -627,7 +687,7 @@ def detect_abandoned_authorizations(sessions):
 # Currency Conversion Helper
 # ---------------------------------------------------------------------------
 
-def convert_to_usd(anomalies_df, exchange_rates):
+def convert_to_usd(anomalies_df: pd.DataFrame, exchange_rates: pd.DataFrame) -> pd.DataFrame:
     """Convert revenue_impact to USD using median exchange rate per currency."""
     if anomalies_df.empty:
         anomalies_df["revenue_impact_usd"] = []
@@ -651,7 +711,7 @@ def convert_to_usd(anomalies_df, exchange_rates):
 # Pipeline Orchestrator
 # ---------------------------------------------------------------------------
 
-def run_pipeline():
+def run_pipeline() -> pd.DataFrame:
     """Execute the full anomaly detection pipeline."""
     print("=" * 60)
     print("Apollo Rides - Anomaly Detection Pipeline")
