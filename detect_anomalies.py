@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Apollo Rides - Transaction Anomaly Detection Pipeline
 
@@ -20,10 +22,12 @@ Each anomaly includes:
 
 import json
 import logging
+import os
 import sys
 from datetime import datetime
 from typing import Any
 import pandas as pd
+import numpy as np
 
 DATA_DIR = "data"
 CAPTURE_MISMATCH_THRESHOLD = 0.10  # 10%
@@ -116,16 +120,23 @@ def validate_data(
         transactions = transactions.drop_duplicates(subset=["transaction_id"], keep="first")
         report["quarantined_rows"] += dup_txns
 
-    # Check for captures before authorizations (impossible — data error)
-    for ride_id, group in transactions.sort_values(["ride_id", "timestamp"]).groupby("ride_id"):
-        auths = group[group["event_type"] == "authorization"]
-        captures = group[group["event_type"] == "capture"]
-        if len(auths) > 0 and len(captures) > 0:
-            if captures["timestamp"].min() < auths["timestamp"].min():
-                report["issues"].append(
-                    f"ride {ride_id}: capture before authorization (data error)"
-                )
-                report["quarantined_rows"] += 1
+    # Vectorized check: captures before authorizations (impossible — data error)
+    auths_min = (
+        transactions[transactions["event_type"] == "authorization"]
+        .groupby("ride_id")["timestamp"].min()
+        .rename("auth_min_ts")
+    )
+    captures_min = (
+        transactions[transactions["event_type"] == "capture"]
+        .groupby("ride_id")["timestamp"].min()
+        .rename("capture_min_ts")
+    )
+    ts_check = auths_min.to_frame().join(captures_min, how="inner")
+    bad_ts = ts_check[ts_check["capture_min_ts"] < ts_check["auth_min_ts"]]
+    if len(bad_ts) > 0:
+        for rid in bad_ts.index:
+            report["issues"].append(f"ride {rid}: capture before authorization (data error)")
+        report["quarantined_rows"] += len(bad_ts)
 
     # Check for orphaned captures (no prior auth)
     rides_with_auth = set(transactions[transactions["event_type"] == "authorization"]["ride_id"].unique())
@@ -637,12 +648,24 @@ def detect_abandoned_authorizations(sessions: dict[str, dict[str, Any]]) -> list
             if age_days > 7:
                 confidence = min(99, confidence + 3)
 
-            recommendation = (
-                f"Abandoned authorization on completed ride {ride_id}: "
-                f"authorized {auths[0]['amount']:.2f} {ride['currency']} "
-                f"but never captured. Ride fare was {ride['actual_fare']:.2f} {ride['currency']}. "
-                f"Attempt late capture or investigate payment processing failure."
-            )
+            # Card authorizations typically expire after 7 days
+            auth_expired = age_days > 7
+
+            if auth_expired:
+                recommendation = (
+                    f"Abandoned authorization on completed ride {ride_id}: "
+                    f"authorized {auths[0]['amount']:.2f} {ride['currency']} "
+                    f"but never captured. Authorization expired ({age_days} days ago). "
+                    f"Late capture is no longer possible — revenue is permanently lost. "
+                    f"Investigate capture webhook failure."
+                )
+            else:
+                recommendation = (
+                    f"Abandoned authorization on completed ride {ride_id}: "
+                    f"authorized {auths[0]['amount']:.2f} {ride['currency']} "
+                    f"but never captured. Auth is {age_days} days old (expires at 7 days). "
+                    f"Attempt immediate late capture before expiration."
+                )
         elif ride["status"] == "cancelled":
             # Cancelled ride with dangling auth — funds held unnecessarily
             impact_category = "money_at_risk"
@@ -811,5 +834,75 @@ def run_pipeline() -> pd.DataFrame:
     return anomalies_df
 
 
+def validate_against_ground_truth(anomalies_df: pd.DataFrame) -> dict[str, float]:
+    """
+    Compare detected anomalies against injected ground truth.
+    Reports precision, recall, and F1 score per anomaly type and overall.
+    """
+    gt_path = f"{DATA_DIR}/ground_truth.csv"
+    if not os.path.exists(gt_path):
+        print("\n[SKIP] No ground_truth.csv found — skipping validation.")
+        return {}
+
+    gt = pd.read_csv(gt_path)
+
+    # Normalize anomaly type names (generator uses short names, detector uses full names)
+    TYPE_MAP = {
+        "duplicate_auth": "duplicate_authorization",
+        "capture_mismatch": "capture_mismatch",
+        "ghost_refund": "ghost_refund",
+        "currency_discrepancy": "currency_discrepancy",
+        "abandoned_auth": "abandoned_authorization",
+    }
+    gt["anomaly_type"] = gt["anomaly_type"].map(TYPE_MAP)
+
+    # Create sets of (ride_id, anomaly_type) tuples
+    gt_set = set(zip(gt["ride_id"], gt["anomaly_type"]))
+    detected_set = set(zip(anomalies_df["ride_id"], anomalies_df["anomaly_type"]))
+
+    true_positives = gt_set & detected_set
+    false_positives = detected_set - gt_set
+    false_negatives = gt_set - detected_set
+
+    tp = len(true_positives)
+    fp = len(false_positives)
+    fn = len(false_negatives)
+
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+
+    print("\n" + "=" * 60)
+    print("GROUND TRUTH VALIDATION")
+    print("=" * 60)
+    print(f"\n  Ground truth entries:  {len(gt_set)}")
+    print(f"  Detected anomalies:   {len(detected_set)}")
+    print(f"  True positives:       {tp}")
+    print(f"  False positives:      {fp}")
+    print(f"  False negatives:      {fn}")
+    print(f"\n  Precision:  {precision:.1%}")
+    print(f"  Recall:     {recall:.1%}")
+    print(f"  F1 Score:   {f1:.1%}")
+
+    # Per-type breakdown
+    print(f"\n  Per-type recall:")
+    for atype in sorted(gt["anomaly_type"].unique()):
+        gt_type = {r for r, t in gt_set if t == atype}
+        det_type = {r for r, t in detected_set if t == atype}
+        type_recall = len(gt_type & det_type) / len(gt_type) if gt_type else 0
+        print(f"    {atype}: {len(gt_type & det_type)}/{len(gt_type)} ({type_recall:.0%})")
+
+    if false_negatives:
+        print(f"\n  Missed anomalies (first 5): {list(false_negatives)[:5]}")
+    if false_positives:
+        print(f"  Extra detections (first 5): {list(false_positives)[:5]}")
+
+    print("=" * 60)
+
+    return {"precision": precision, "recall": recall, "f1": f1}
+
+
 if __name__ == "__main__":
-    run_pipeline()
+    result = run_pipeline()
+    if not result.empty:
+        validate_against_ground_truth(result)

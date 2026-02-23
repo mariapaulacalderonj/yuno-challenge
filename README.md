@@ -97,25 +97,41 @@ These thresholds are tighter than raw daily volatility because ride-hailing capt
 
 ## Test Data Design
 
-- **500 rides** across Dec 2025 — Feb 2026
+- **2,000 rides** across Dec 2025 — Feb 2026 (4,299 transaction events)
 - **3 currencies:** MXN (Mexico 40%), COP (Colombia 35%), BRL (Brazil 25%)
 - **~70% clean, ~30% anomalous** with ground truth saved to `data/ground_truth.csv`
 - **Severity spectrum:** Each anomaly type has subtle (borderline), moderate, and obvious variants
+- **Multi-anomaly rides:** ~40 rides have 2 simultaneous anomaly types (e.g., duplicate auth + capture mismatch)
 - **Legitimate edge cases** that should NOT be flagged: fare adjustments, disputed rides with justified refunds, cancelled rides with proper voids
 
 ## Key Findings (Sample Run)
 
 | Metric | Value |
 |--------|-------|
-| Total anomalies | 150 |
-| Revenue lost (confirmed) | $1,006 USD |
-| Revenue at risk | $801 USD |
-| Most impactful type | Duplicate authorizations ($700 USD) |
-| Most affected country | Mexico (64 anomalies, $982 USD) |
-| Average confidence | 88.7% |
-| High confidence (>80%) | 121 anomalies |
-| Detection precision | 100% (0 false positives) |
-| Detection recall | 100% (150/150 injected anomalies found) |
+| Total anomalies | 638 |
+| Revenue lost (confirmed) | $26,630 USD |
+| Revenue at risk | $19,905 USD |
+| **Total impact** | **$46,535 USD** |
+| Most impactful type | Duplicate authorizations ($16,704 USD) |
+| Most affected country | Mexico (273 anomalies, $23,785 USD) |
+| Average confidence | 88.0% |
+| High confidence (>80%) | 493 anomalies |
+| Detection precision | 100.0% (0 false positives) |
+| Detection recall | 99.7% (638/640 injected anomalies found) |
+| F1 Score | 99.8% |
+
+## Running Tests
+
+```bash
+python -m unittest test_detect_anomalies -v
+```
+
+14 unit tests covering all 5 detectors + data validation:
+- True positive detection (anomalies correctly identified)
+- True negative verification (legitimate transactions NOT flagged)
+- Confidence score validation
+- Revenue impact calculation accuracy
+- Data quality quarantine behavior
 
 ## Stretch Goals Implemented
 

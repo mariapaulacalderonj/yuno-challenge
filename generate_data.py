@@ -24,29 +24,36 @@ np.random.seed(SEED)
 
 # Configuration
 DATA_DIR = "data"
-NUM_RIDES = 500
-NUM_RIDERS = 80
-NUM_DRIVERS = 40
+NUM_RIDES = 2000
+NUM_RIDERS = 300
+NUM_DRIVERS = 150
 START_DATE = datetime(2025, 12, 1)
 END_DATE = datetime(2026, 2, 23)
 
+# Fare ranges include standard + premium rides (airport transfers, intercity, surge)
+# A growing platform processes high-value rides: airport transfers ($30-80 USD),
+# intercity ($50-150 USD), and surge-priced rides during peak hours
 COUNTRIES = {
-    "MX": {"currency": "MXN", "weight": 0.40, "fare_range": (45, 650)},
-    "CO": {"currency": "COP", "weight": 0.35, "fare_range": (5000, 85000)},
-    "BR": {"currency": "BRL", "weight": 0.25, "fare_range": (12, 180)},
+    "MX": {"currency": "MXN", "weight": 0.40, "fare_range": (120, 4500)},
+    "CO": {"currency": "COP", "weight": 0.35, "fare_range": (15000, 600000)},
+    "BR": {"currency": "BRL", "weight": 0.25, "fare_range": (40, 950)},
 }
 
 # Exchange rate baselines (currency per 1 USD)
 RATE_BASELINES = {"MXN": 17.2, "COP": 4150.0, "BRL": 5.1}
 
-# Anomaly budget (~30% of rides)
+# Anomaly budget (~30% of rides, distributed across 5 types)
+# Some rides will get 2 anomalies (multi-anomaly) for realism
 ANOMALY_COUNTS = {
-    "duplicate_auth": 30,
-    "capture_mismatch": 35,
-    "ghost_refund": 30,
-    "currency_discrepancy": 30,
-    "abandoned_auth": 25,
+    "duplicate_auth": 120,
+    "capture_mismatch": 140,
+    "ghost_refund": 120,
+    "currency_discrepancy": 120,
+    "abandoned_auth": 100,
 }
+
+# ~40 rides will have 2 anomaly types simultaneously
+MULTI_ANOMALY_COUNT = 40
 
 # Counters
 _txn_counter = 0
@@ -471,34 +478,65 @@ def main():
     completed_indices = rides_df[completed_mask].index.tolist()
     random.shuffle(completed_indices)
 
-    anomaly_assignments = {}
+    # Each ride maps to a LIST of anomaly types (supports multi-anomaly)
+    anomaly_assignments: dict[int, list[str]] = {}
     idx = 0
     for anomaly_type, count in ANOMALY_COUNTS.items():
         for _ in range(count):
             if idx < len(completed_indices):
-                anomaly_assignments[completed_indices[idx]] = anomaly_type
+                ride_idx = completed_indices[idx]
+                anomaly_assignments.setdefault(ride_idx, []).append(anomaly_type)
                 idx += 1
+
+    # Inject multi-anomaly: pick some rides and add a second compatible anomaly
+    # Compatible combos: duplicate_auth + capture_mismatch, ghost_refund + currency_discrepancy
+    COMPATIBLE_PAIRS = [
+        ("duplicate_auth", "capture_mismatch"),
+        ("ghost_refund", "currency_discrepancy"),
+        ("capture_mismatch", "currency_discrepancy"),
+    ]
+    single_anomaly_rides = [k for k, v in anomaly_assignments.items() if len(v) == 1]
+    random.shuffle(single_anomaly_rides)
+    multi_count = 0
+    for ride_idx in single_anomaly_rides:
+        if multi_count >= MULTI_ANOMALY_COUNT:
+            break
+        existing = anomaly_assignments[ride_idx][0]
+        # Find a compatible second anomaly (skip abandoned_auth — it removes captures)
+        for a, b in COMPATIBLE_PAIRS:
+            if existing == a:
+                anomaly_assignments[ride_idx].append(b)
+                multi_count += 1
+                break
+            elif existing == b:
+                anomaly_assignments[ride_idx].append(a)
+                multi_count += 1
+                break
 
     # Step 4: Generate transactions with anomaly injection
     all_txns = []
     injected_counts = {k: 0 for k in ANOMALY_COUNTS}
+    multi_anomaly_count = 0
 
     for i, ride in rides_df.iterrows():
         txns = generate_clean_transactions(ride.to_dict())
 
         if i in anomaly_assignments:
-            atype = anomaly_assignments[i]
-            if atype == "duplicate_auth":
-                txns = inject_duplicate_auth(ride.to_dict(), txns)
-            elif atype == "capture_mismatch":
-                txns = inject_capture_mismatch(ride.to_dict(), txns)
-            elif atype == "ghost_refund":
-                txns = inject_ghost_refund(ride.to_dict(), txns)
-            elif atype == "currency_discrepancy":
-                txns = inject_currency_discrepancy(ride.to_dict(), txns, exchange_rates)
-            elif atype == "abandoned_auth":
-                txns = inject_abandoned_auth(ride.to_dict(), txns)
-            injected_counts[atype] += 1
+            atypes = anomaly_assignments[i]
+            if len(atypes) > 1:
+                multi_anomaly_count += 1
+            for atype in atypes:
+                if atype == "duplicate_auth":
+                    txns = inject_duplicate_auth(ride.to_dict(), txns)
+                elif atype == "capture_mismatch":
+                    txns = inject_capture_mismatch(ride.to_dict(), txns)
+                elif atype == "ghost_refund":
+                    txns = inject_ghost_refund(ride.to_dict(), txns)
+                elif atype == "currency_discrepancy":
+                    txns = inject_currency_discrepancy(ride.to_dict(), txns, exchange_rates)
+                elif atype == "abandoned_auth":
+                    txns = inject_abandoned_auth(ride.to_dict(), txns)
+                injected_counts[atype] += 1
 
         all_txns.extend(txns)
 
@@ -528,13 +566,14 @@ def main():
     # Step 5: Disputes & cancellations (only for disputed/cancelled rides)
     disputes_df = generate_disputes_cancellations(rides_df)
 
-    # Save anomaly ground truth for validation
+    # Save anomaly ground truth for validation (supports multi-anomaly rides)
     ground_truth = []
-    for idx, atype in anomaly_assignments.items():
-        ground_truth.append({
-            "ride_id": rides_df.loc[idx, "ride_id"],
-            "anomaly_type": atype,
-        })
+    for idx, atypes in anomaly_assignments.items():
+        for atype in atypes:
+            ground_truth.append({
+                "ride_id": rides_df.loc[idx, "ride_id"],
+                "anomaly_type": atype,
+            })
     gt_df = pd.DataFrame(ground_truth)
     gt_df.to_csv(f"{DATA_DIR}/ground_truth.csv", index=False)
 
@@ -553,6 +592,8 @@ def main():
     print(f"     - Event types: {transactions_df['event_type'].value_counts().to_dict()}")
     print(f"[OK] Disputes/Cancellations: {len(disputes_df)} records")
     print(f"[OK] Injected anomalies: {injected_counts}")
+    print(f"     - Multi-anomaly rides: {multi_anomaly_count}")
+    print(f"     - Ground truth entries: {len(ground_truth)}")
     print(f"\nAll files saved to {DATA_DIR}/")
     print("=" * 60)
 
