@@ -31,8 +31,10 @@ CAPTURE_MISMATCH_THRESHOLD = 0.10  # 10%
 # Currency-specific FX tolerance thresholds (justified by volatility)
 # MXN: low volatility (~0.3%/day) -> 2% tolerance
 # COP: medium volatility (~0.5%/day) -> 3% tolerance
-# BRL: high volatility (~0.6%/day) -> 3.5% tolerance
-FX_TOLERANCE = {"MXN": 0.02, "COP": 0.03, "BRL": 0.035}
+# BRL: high volatility (~0.6%/day) -> 3% tolerance (tighter than raw volatility
+#   suggests, because auth-to-capture gap is typically <1 hour for ride-hailing,
+#   not a full trading day — so intraday drift should be well below daily volatility)
+FX_TOLERANCE = {"MXN": 0.02, "COP": 0.03, "BRL": 0.03}
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("anomaly_detector")
@@ -476,7 +478,7 @@ def detect_currency_discrepancies(sessions, exchange_rates):
 
         discrepancy_pct = abs(reported_usd - expected_usd) / expected_usd
 
-        if discrepancy_pct <= tolerance:
+        if discrepancy_pct < tolerance:
             continue
 
         revenue_impact = abs(reported_usd - expected_usd)

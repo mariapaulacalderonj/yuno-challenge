@@ -1,0 +1,96 @@
+record_id,ride_id,type,reason,timestamp
+REC-00001,RIDE-00008,dispute,Driver no-show,2025-12-22T15:43:02
+REC-00002,RIDE-00012,cancellation,Driver cancelled,2026-01-30T01:16:19
+REC-00003,RIDE-00014,cancellation,No driver available,2025-12-08T18:05:43
+REC-00004,RIDE-00019,dispute,Ride quality issue,2025-12-27T07:01:26
+REC-00005,RIDE-00022,cancellation,No driver available,2025-12-21T11:38:32
+REC-00006,RIDE-00026,cancellation,Rider changed plans,2026-01-11T14:28:23
+REC-00007,RIDE-00035,cancellation,No driver available,2026-01-19T07:12:02
+REC-00008,RIDE-00039,cancellation,Duplicate booking,2026-01-05T05:52:23
+REC-00009,RIDE-00040,cancellation,Driver cancelled,2025-12-24T09:18:17
+REC-00010,RIDE-00043,cancellation,Driver cancelled,2026-01-21T05:45:08
+REC-00011,RIDE-00045,dispute,Ride quality issue,2026-01-09T11:43:09
+REC-00012,RIDE-00049,cancellation,Duplicate booking,2025-12-04T01:25:50
+REC-00013,RIDE-00051,cancellation,Rider cancelled before pickup,2026-02-09T05:45:01
+REC-00014,RIDE-00054,cancellation,Driver cancelled,2026-01-15T08:24:46
+REC-00015,RIDE-00056,cancellation,Rider changed plans,2026-02-16T17:36:56
+REC-00016,RIDE-00059,cancellation,Driver cancelled,2026-02-22T15:08:19
+REC-00017,RIDE-00062,cancellation,Driver cancelled,2025-12-21T18:14:02
+REC-00018,RIDE-00063,dispute,Incorrect fare charged,2025-12-03T05:01:20
+REC-00019,RIDE-00065,dispute,Incorrect fare charged,2026-02-11T12:12:02
+REC-00020,RIDE-00070,cancellation,Rider cancelled before pickup,2025-12-08T18:52:23
+REC-00021,RIDE-00071,cancellation,No driver available,2026-02-04T13:31:33
+REC-00022,RIDE-00074,cancellation,Duplicate booking,2025-12-31T17:14:42
+REC-00023,RIDE-00079,cancellation,Duplicate booking,2025-12-13T20:42:46
+REC-00024,RIDE-00086,cancellation,Rider changed plans,2025-12-25T09:18:17
+REC-00025,RIDE-00093,dispute,Incorrect fare charged,2026-02-16T19:05:57
+REC-00026,RIDE-00095,cancellation,Rider changed plans,2026-01-24T08:38:23
+REC-00027,RIDE-00098,cancellation,Rider cancelled before pickup,2026-02-10T12:20:10
+REC-00028,RIDE-00104,dispute,Ride quality issue,2025-12-09T08:45:43
+REC-00029,RIDE-00112,cancellation,Driver cancelled,2025-12-07T19:04:02
+REC-00030,RIDE-00122,dispute,Safety concern reported,2026-02-19T18:03:53
+REC-00031,RIDE-00124,dispute,Driver took wrong route,2025-12-25T16:31:28
+REC-00032,RIDE-00132,cancellation,Duplicate booking,2026-02-08T20:05:47
+REC-00033,RIDE-00142,cancellation,Driver cancelled,2025-12-02T21:36:45
+REC-00034,RIDE-00143,cancellation,Driver cancelled,2025-12-01T13:59:19
+REC-00035,RIDE-00144,cancellation,No driver available,2026-02-21T20:41:40
+REC-00036,RIDE-00161,dispute,Driver took wrong route,2025-12-17T07:36:07
+REC-00037,RIDE-00173,cancellation,Duplicate booking,2026-02-19T15:56:36
+REC-00038,RIDE-00184,dispute,Ride quality issue,2026-01-11T15:29:44
+REC-00039,RIDE-00187,dispute,Safety concern reported,2026-01-23T00:39:12
+REC-00040,RIDE-00208,cancellation,Rider cancelled before pickup,2025-12-23T16:01:00
+REC-00041,RIDE-00210,cancellation,Rider changed plans,2025-12-15T11:20:13
+REC-00042,RIDE-00212,cancellation,Rider cancelled before pickup,2026-01-25T06:26:54
+REC-00043,RIDE-00215,cancellation,No driver available,2025-12-04T20:58:56
+REC-00044,RIDE-00217,dispute,Ride quality issue,2025-12-03T11:20:25
+REC-00045,RIDE-00219,cancellation,Rider changed plans,2026-01-12T22:41:09
+REC-00046,RIDE-00222,cancellation,Rider changed plans,2025-12-11T03:55:07
+REC-00047,RIDE-00226,dispute,Incorrect fare charged,2026-02-19T14:13:10
+REC-00048,RIDE-00233,cancellation,Duplicate booking,2026-02-20T16:49:02
+REC-00049,RIDE-00236,dispute,Safety concern reported,2026-01-17T19:18:19
+REC-00050,RIDE-00238,cancellation,Driver cancelled,2025-12-14T06:16:14
+REC-00051,RIDE-00241,dispute,Safety concern reported,2026-01-26T19:19:09
+REC-00052,RIDE-00244,dispute,Driver no-show,2025-12-20T03:35:30
+REC-00053,RIDE-00245,cancellation,No driver available,2025-12-23T16:17:23
+REC-00054,RIDE-00249,cancellation,Driver cancelled,2025-12-10T18:03:59
+REC-00055,RIDE-00251,dispute,Driver took wrong route,2026-02-04T10:45:03
+REC-00056,RIDE-00256,dispute,Safety concern reported,2025-12-29T23:38:29
+REC-00057,RIDE-00265,cancellation,Duplicate booking,2026-01-15T04:08:07
+REC-00058,RIDE-00266,cancellation,Driver cancelled,2026-01-12T21:28:17
+REC-00059,RIDE-00268,dispute,Incorrect fare charged,2025-12-22T00:12:33
+REC-00060,RIDE-00271,cancellation,Driver cancelled,2026-01-24T22:53:36
+REC-00061,RIDE-00280,dispute,Safety concern reported,2026-01-17T01:47:12
+REC-00062,RIDE-00293,cancellation,Rider changed plans,2025-12-23T19:10:25
+REC-00063,RIDE-00298,dispute,Incorrect fare charged,2026-01-15T04:12:59
+REC-00064,RIDE-00302,dispute,Driver took wrong route,2026-01-28T15:27:03
+REC-00065,RIDE-00303,dispute,Incorrect fare charged,2025-12-25T12:33:23
+REC-00066,RIDE-00305,cancellation,Driver cancelled,2026-02-17T22:44:02
+REC-00067,RIDE-00306,cancellation,Rider cancelled before pickup,2026-02-15T13:54:23
+REC-00068,RIDE-00307,dispute,Incorrect fare charged,2025-12-16T06:08:50
+REC-00069,RIDE-00314,cancellation,Rider cancelled before pickup,2026-02-15T01:08:04
+REC-00070,RIDE-00315,dispute,Ride quality issue,2026-02-02T03:05:32
+REC-00071,RIDE-00322,cancellation,Rider cancelled before pickup,2026-02-02T04:50:44
+REC-00072,RIDE-00329,dispute,Incorrect fare charged,2026-01-27T05:33:45
+REC-00073,RIDE-00355,cancellation,Rider cancelled before pickup,2025-12-08T13:26:58
+REC-00074,RIDE-00377,cancellation,Rider changed plans,2026-02-17T17:49:22
+REC-00075,RIDE-00384,cancellation,Rider changed plans,2026-02-09T06:28:17
+REC-00076,RIDE-00386,dispute,Driver no-show,2026-01-01T10:53:32
+REC-00077,RIDE-00387,cancellation,Rider changed plans,2026-02-07T19:48:10
+REC-00078,RIDE-00389,cancellation,Duplicate booking,2026-02-19T11:43:51
+REC-00079,RIDE-00395,cancellation,Rider cancelled before pickup,2026-01-02T16:57:04
+REC-00080,RIDE-00403,dispute,Driver no-show,2026-01-12T04:33:01
+REC-00081,RIDE-00404,cancellation,Driver cancelled,2025-12-14T10:32:31
+REC-00082,RIDE-00406,cancellation,Rider changed plans,2026-01-20T02:11:21
+REC-00083,RIDE-00409,cancellation,Rider cancelled before pickup,2026-01-03T22:40:32
+REC-00084,RIDE-00415,cancellation,Rider cancelled before pickup,2025-12-01T12:20:10
+REC-00085,RIDE-00425,cancellation,No driver available,2026-01-07T21:51:23
+REC-00086,RIDE-00433,cancellation,Rider cancelled before pickup,2025-12-31T15:29:29
+REC-00087,RIDE-00436,cancellation,Driver cancelled,2025-12-05T15:38:29
+REC-00088,RIDE-00453,dispute,Driver no-show,2025-12-25T16:38:14
+REC-00089,RIDE-00457,cancellation,Rider cancelled before pickup,2025-12-14T04:25:12
+REC-00090,RIDE-00459,dispute,Driver took wrong route,2026-02-22T00:12:26
+REC-00091,RIDE-00473,cancellation,Duplicate booking,2026-01-20T09:17:10
+REC-00092,RIDE-00474,dispute,Driver no-show,2026-02-02T13:47:24
+REC-00093,RIDE-00481,cancellation,Rider cancelled before pickup,2026-01-18T08:37:46
+REC-00094,RIDE-00485,cancellation,Driver cancelled,2025-12-31T08:32:12
+REC-00095,RIDE-00492,dispute,Driver no-show,2026-01-18T20:02:34

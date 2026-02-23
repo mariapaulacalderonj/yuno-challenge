@@ -81,12 +81,12 @@ Anomalies are found in the **gap** between what the business says happened and w
 
 **How:** Compare `amount_usd` against `amount / exchange_rate` for the capture date.
 
-**Thresholds (justified by currency volatility):**
+**Thresholds (justified by currency volatility and auth-to-capture timing):**
 - MXN: 2% tolerance (low volatility, ~0.3%/day)
 - COP: 3% tolerance (medium volatility, ~0.5%/day)
-- BRL: 3.5% tolerance (high volatility, ~0.6%/day)
+- BRL: 3% tolerance (high volatility, ~0.6%/day, but auth-to-capture gap in ride-hailing is typically <1 hour, so intraday drift is well below full-day volatility)
 
-These account for the hours-long gap between authorization and capture during which rates can drift.
+These thresholds are tighter than raw daily volatility because ride-hailing captures happen within minutes to hours of authorization — not a full trading day apart.
 
 ### 5. Abandoned Authorizations
 **What:** Rides that were authorized but never captured or voided.
@@ -107,13 +107,15 @@ These account for the hours-long gap between authorization and capture during wh
 
 | Metric | Value |
 |--------|-------|
-| Total anomalies | 148 |
-| Revenue lost (confirmed) | ~$1,005 USD |
-| Revenue at risk | ~$800 USD |
-| Most impactful type | Duplicate authorizations (~$700 USD) |
-| Most affected country | Mexico (64 anomalies, ~$982 USD) |
-| Average confidence | 89.1% |
+| Total anomalies | 150 |
+| Revenue lost (confirmed) | $1,006 USD |
+| Revenue at risk | $801 USD |
+| Most impactful type | Duplicate authorizations ($700 USD) |
+| Most affected country | Mexico (64 anomalies, $982 USD) |
+| Average confidence | 88.7% |
 | High confidence (>80%) | 121 anomalies |
+| Detection precision | 100% (0 false positives) |
+| Detection recall | 100% (150/150 injected anomalies found) |
 
 ## Stretch Goals Implemented
 

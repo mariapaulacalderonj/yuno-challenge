@@ -327,30 +327,75 @@ def render_insights(filtered):
         f"(ghost refunds + abandoned auths + undercharges).",
     ]
 
-    # Currency-specific insight
+    # Currency-specific insight with root cause
     if "Currency Discrepancy" in filtered["anomaly_label"].values:
         fx_df = filtered[filtered["anomaly_label"] == "Currency Discrepancy"]
         fx_by_currency = fx_df.groupby("currency").size()
         if len(fx_by_currency) > 0:
             worst_fx_currency = fx_by_currency.idxmax()
+            fx_count = fx_by_currency.max()
+            total_fx = len(fx_df)
             insights.append(
-                f"Currency discrepancies are most common in **{worst_fx_currency}** transactions "
-                f"({fx_by_currency.max()} cases) — review processor FX rate configuration for this currency."
+                f"Currency discrepancies are **{fx_count/total_fx*100:.0f}%** concentrated in "
+                f"**{worst_fx_currency}** transactions ({fx_count}/{total_fx} cases) "
+                f"→ likely a processor configuration issue with FX rate source for {worst_fx_currency}. "
+                f"**Action:** audit the payment processor's exchange rate feed and compare against market rates."
             )
 
-    # Ghost refund insight
+    # Ghost refund insight with root cause
     if "Ghost Refund" in filtered["anomaly_label"].values:
         ghost_df = filtered[filtered["anomaly_label"] == "Ghost Refund"]
         ghost_by_country = ghost_df.groupby("country_label")["revenue_impact_usd"].sum()
         if len(ghost_by_country) > 0:
             worst_ghost_country = ghost_by_country.idxmax()
+            ghost_pct = ghost_by_country.max() / ghost_by_country.sum() * 100
             insights.append(
-                f"Ghost refunds are concentrated in **{worst_ghost_country}** "
-                f"(${ghost_by_country.max():,.2f} USD) — audit refund authorization process in this market."
+                f"**{ghost_pct:.0f}%** of ghost refund losses are in **{worst_ghost_country}** "
+                f"(${ghost_by_country.max():,.2f} USD) "
+                f"→ possible compromised refund workflow or misconfigured automated refund rules in this market. "
+                f"**Action:** audit refund authorization permissions and check for unauthorized API access."
             )
+
+    # Duplicate auth insight with root cause
+    if "Duplicate Authorization" in filtered["anomaly_label"].values:
+        dup_df = filtered[filtered["anomaly_label"] == "Duplicate Authorization"]
+        if len(dup_df) > 0:
+            dup_impact = dup_df["revenue_impact_usd"].sum()
+            high_conf_dup = len(dup_df[dup_df["confidence"] >= 90])
+            insights.append(
+                f"**{high_conf_dup}/{len(dup_df)}** duplicate authorizations are high-confidence (≥90%) "
+                f"with **${dup_impact:,.2f} USD** in held funds "
+                f"→ strongly indicates client-side payment retry logic sending duplicate requests. "
+                f"**Action:** implement idempotency keys on the payment gateway and add dedup logic at the API layer."
+            )
+
+    # Abandoned auth insight with root cause
+    if "Abandoned Authorization" in filtered["anomaly_label"].values:
+        aband_df = filtered[filtered["anomaly_label"] == "Abandoned Authorization"]
+        if len(aband_df) > 0:
+            aband_lost = aband_df[aband_df["impact_category"] == "money_lost"]
+            if len(aband_lost) > 0:
+                insights.append(
+                    f"**{len(aband_lost)} completed rides** were never captured — **${aband_lost['revenue_impact_usd'].sum():,.2f} USD** "
+                    f"of earned revenue was never collected "
+                    f"→ the ride-completion-to-capture webhook is failing silently. "
+                    f"**Action:** add monitoring on the capture callback and implement a reconciliation cron job "
+                    f"that catches uncaptured rides within 24h."
+                )
 
     for i, insight in enumerate(insights, 1):
         st.markdown(f"{i}. {insight}")
+
+    # Recommended next steps summary
+    st.markdown("---")
+    st.subheader("Recommended Next Steps")
+    st.markdown("""
+1. **Immediate recovery** — Process the high-confidence ghost refund and abandoned authorization cases to recover confirmed lost revenue
+2. **Duplicate auth prevention** — Deploy idempotency keys on the payment gateway to prevent duplicate authorizations at the source
+3. **Capture monitoring** — Set up alerts for rides that remain uncaptured >1 hour after completion
+4. **FX rate audit** — Compare processor-applied exchange rates against market benchmarks for each currency
+5. **Refund controls** — Implement approval workflows for refunds on completed rides with no dispute record
+    """)
 
 
 def render_data_quality(validation):
