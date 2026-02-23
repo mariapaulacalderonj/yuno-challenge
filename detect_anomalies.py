@@ -18,12 +18,10 @@ Each anomaly includes:
   - Actionable recommendation
 """
 
-import os
 import json
 import logging
 from datetime import datetime
 import pandas as pd
-import numpy as np
 
 DATA_DIR = "data"
 CAPTURE_MISMATCH_THRESHOLD = 0.10  # 10%
@@ -440,10 +438,11 @@ def detect_currency_discrepancies(sessions, exchange_rates):
     Thresholds are currency-specific and justified by volatility:
     - MXN: 2% (low volatility, ~0.3%/day)
     - COP: 3% (medium volatility, ~0.5%/day)
-    - BRL: 3.5% (high volatility, ~0.6%/day)
+    - BRL: 3% (high volatility ~0.6%/day, but auth-to-capture gap
+      in ride-hailing is typically <1 hour, not a full trading day)
 
-    These thresholds account for the fact that auth and capture may happen
-    hours apart, during which exchange rates can drift.
+    These thresholds are tighter than raw daily volatility because
+    ride-hailing captures happen within minutes to hours of authorization.
     """
     anomalies = []
     rate_lookup = exchange_rates.set_index(["date", "currency"])["rate_to_usd"]
